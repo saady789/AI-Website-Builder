@@ -52,7 +52,13 @@ async function main() {
   const anthropic = new Anthropic();
 
   const app = express();
-  app.use(cors());
+  app.use(
+    cors({
+      origin: "alora.saady.dev",
+      methods: ["GET", "POST"],
+      credentials: true,
+    })
+  );
   app.use(express.json());
 
   app.post(

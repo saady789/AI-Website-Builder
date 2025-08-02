@@ -1,1 +1,1 @@
-export const BACKEND_URL = "http://localhost:3000"
+export const BACKEND_URL = "https://ai-website-builder-o4bz.onrender.com/";
