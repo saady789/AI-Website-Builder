@@ -1,4 +1,5 @@
-require("dotenv").config();
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
@@ -13,6 +14,7 @@ import { Request, Response, NextFunction } from "express";
 const redis = createClient({
   url: process.env.REDIS_URL,
 });
+
 redis.on("error", (err) => console.error("❌ Redis error:", err));
 
 // Rate limiting middleware
