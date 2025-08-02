@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "(docker start myredis || docker run -d --name myredis -p 6379:6379 redis) && tsc -b && node dist/index.js"
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "dev": "(docker start myredis || docker run -d --name myredis -p 6379:6379 redis) && tsc -b && node dist/index.js",
+    "run": "npm run build && npm run start"
   },
   "keywords": [],
   "author": "",
