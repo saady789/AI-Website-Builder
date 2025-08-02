@@ -10,7 +10,9 @@ import { basePrompt as reactBasePrompt } from "./defaults/react";
 import { Request, Response, NextFunction } from "express";
 
 // Create Redis client
-const redis = createClient();
+const redis = createClient({
+  url: process.env.REDIS_URL,
+});
 redis.on("error", (err) => console.error("❌ Redis error:", err));
 
 // Rate limiting middleware
