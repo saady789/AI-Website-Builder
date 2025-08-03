@@ -57,7 +57,7 @@ export function Builder() {
       console.log("SETTING false");
     } else {
       console.log("Calling init");
-      init();
+      init(promptSafe);
     }
   }, []);
 
@@ -182,55 +182,105 @@ export function Builder() {
     webcontainer?.mount(mountStructure);
   }, [files, webcontainer]);
 
-  async function init() {
-    const response = await axios.post(`${BACKEND_URL}/template`, {
-      prompt: prompt?.trim(),
-    });
-    setTemplateSet(true);
+  // async function init() {
+  //   const response = await axios.post(`${BACKEND_URL}/template`, {
+  //     prompt: prompt?.trim(),
+  //   });
+  //   setTemplateSet(true);
 
-    const { prompts, uiPrompts } = response.data;
+  //   const { prompts, uiPrompts } = response.data;
 
-    setSteps(
-      parseXml(uiPrompts[0]).map((x: Step) => ({
-        ...x,
-        status: "pending",
-      }))
-    );
+  //   setSteps(
+  //     parseXml(uiPrompts[0]).map((x: Step) => ({
+  //       ...x,
+  //       status: "pending",
+  //     }))
+  //   );
 
-    setLoading(true);
-    const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
-      messages: [...prompts, prompt].map((content) => ({
-        role: "user",
-        content,
-      })),
-    });
+  //   setLoading(true);
+  //   const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
+  //     messages: [...prompts, prompt].map((content) => ({
+  //       role: "user",
+  //       content,
+  //     })),
+  //   });
 
-    setLoading(false);
+  //   setLoading(false);
 
-    setSteps((s) => [
-      ...s,
-      ...parseXml(stepsResponse.data.response).map((x) => ({
-        ...x,
-        status: "pending" as "pending",
-      })),
-    ]);
+  //   setSteps((s) => [
+  //     ...s,
+  //     ...parseXml(stepsResponse.data.response).map((x) => ({
+  //       ...x,
+  //       status: "pending" as "pending",
+  //     })),
+  //   ]);
 
-    setLlmMessages(
-      [...prompts, prompt].map((content) => ({
-        role: "user",
-        content,
-      }))
-    );
+  //   setLlmMessages(
+  //     [...prompts, prompt].map((content) => ({
+  //       role: "user",
+  //       content,
+  //     }))
+  //   );
 
-    setLlmMessages((x) => [
-      ...x,
-      { role: "assistant", content: stepsResponse.data.response },
-    ]);
+  //   setLlmMessages((x) => [
+  //     ...x,
+  //     { role: "assistant", content: stepsResponse.data.response },
+  //   ]);
+  // }
+
+  async function init(prompt: string) {
+    try {
+      setLoading(true);
+
+      const response = await axios.post(`${BACKEND_URL}/template`, {
+        prompt: prompt.trim(),
+      });
+
+      const { prompts, uiPrompts } = response.data;
+
+      setTemplateSet(true);
+
+      setSteps(
+        parseXml(uiPrompts[0]).map((x: Step) => ({
+          ...x,
+          status: "pending",
+        }))
+      );
+
+      const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
+        messages: [...prompts, prompt].map((content) => ({
+          role: "user",
+          content,
+        })),
+      });
+
+      setSteps((s) => [
+        ...s,
+        ...parseXml(stepsResponse.data.response).map((x) => ({
+          ...x,
+          status: "pending" as const,
+        })),
+      ]);
+
+      setLlmMessages((prev) => [
+        ...[...prompts, prompt].map((content) => ({
+          role: "user" as const,
+          content,
+        })),
+        { role: "assistant", content: stepsResponse.data.response },
+      ]);
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        setIsValidPrompt(false); // This triggers the fallback UI block
+        localStorage.removeItem("lastPrompt"); // Optional: clear it
+      } else {
+        console.error("Unexpected init error:", err);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // useEffect(() => {
-  //   init();
-  // }, []);
   if (!isValidPrompt) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-center px-4">
@@ -271,9 +321,7 @@ export function Builder() {
                 <div className="flex">
                   <br />
                   {(loading || !templateSet) && <Loader />}
-                  {!(loading || !templateSet) && (
-                    <div className="flex">Your app has been created</div>
-                  )}
+                  {!(loading || !templateSet) && <div className="flex"></div>}
                 </div>
               </div>
             </div>

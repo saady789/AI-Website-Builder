@@ -17,32 +17,44 @@ const redis = createClient({
 
 redis.on("error", (err) => console.error("❌ Redis error:", err));
 
-// Rate limiting middleware
 const rateLimitOncePerWeek = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   const ip = req.ip;
-  const key = `limit:${ip}`;
-  const now = Date.now();
-  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const key = `limit:${req.path}:${ip}`;
+  const oneWeekInSeconds = 7 * 24 * 60 * 60;
 
   try {
-    const lastTime = await redis.get(key);
-    if (lastTime && now - parseInt(lastTime) < oneWeek) {
-      const nextTry = new Date(parseInt(lastTime) + oneWeek).toLocaleString();
-      res
-        .status(429)
-        .json({ message: `Rate limit: try again after ${nextTry}` });
-      return; // 👈 prevent continuation but don't return a value
+    const count = await redis.get(key);
+
+    if (count !== null && parseInt(count) >= 2) {
+      console.log("❌ Rate limit hit for", key);
+
+      const ttl = await redis.ttl(key); // Get time-to-live in seconds
+      const retryTimestamp = new Date(Date.now() + ttl * 1000).toISOString();
+
+      res.status(429).json({
+        message: `Rate limit exceeded. Try again after ${retryTimestamp}`,
+        retryAt: retryTimestamp,
+      });
+      return;
     }
 
-    await redis.set(key, now.toString());
-    next(); // ✅ Let the request pass
+    // Either increment or set the counter with TTL
+    const tx = redis.multi();
+    tx.incr(key);
+    if (count === null) {
+      tx.expire(key, oneWeekInSeconds);
+    }
+    await tx.exec();
+
+    console.log("✅ Rate limit passed for", key);
+    next();
   } catch (err) {
-    console.error("Redis check failed:", err);
-    next(); // Let it through if Redis fails
+    console.error("⚠️ Redis failed:", err);
+    next(); // Fail open on Redis error
   }
 };
 
@@ -54,58 +66,62 @@ async function main() {
   const app = express();
   app.use(
     cors({
-      origin: ["https://alora.saady.dev"], // array of allowed domains
+      origin: "alora.spotify.dev",
       methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"], // add if using custom headers
-      credentials: true, // required if you're using cookies/auth headers
+      allowedHeaders: ["Content-Type", "Authorization"],
+      credentials: true,
     })
   );
 
+  // // 2. Preflight handler
+  // app.options("*", (req, res) => {
+  //   res.sendStatus(200);
+  // });
+
+  // 3. JSON parser
   app.use(express.json());
 
-  app.post(
-    "/template",
-    rateLimitOncePerWeek,
-    async (req: Request, res: Response): Promise<void> => {
-      const prompt = req.body.prompt;
+  app.post("/template", async (req: Request, res: Response): Promise<void> => {
+    console.log("\n template function got called ");
+    const prompt = req.body.prompt;
 
-      const response = await anthropic.messages.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 200,
-        system:
-          "Return either node or react based on what do you think this project should be. Only return a single word either 'node' or 'react'. Do not return anything extra",
+    const response = await anthropic.messages.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 200,
+      system:
+        "Return either node or react based on what do you think this project should be. Only return a single word either 'node' or 'react'. Do not return anything extra",
+    });
+
+    const answer = (response.content[0] as TextBlock).text?.trim();
+
+    if (answer === "react") {
+      res.json({
+        prompts: [
+          BASE_PROMPT,
+          `Here is an artifact that contains all files of the project visible to you.\nConsider the contents of ALL files in the project.\n\n${reactBasePrompt}\n\nHere is a list of files that exist on the file system but are not being shown to you:\n\n  - .gitignore\n  - package-lock.json\n`,
+        ],
+        uiPrompts: [reactBasePrompt],
       });
+      return; // ✅ void return (not the res.json result)
+    }
 
-      const answer = (response.content[0] as TextBlock).text?.trim();
-
-      if (answer === "react") {
-        res.json({
-          prompts: [
-            BASE_PROMPT,
-            `Here is an artifact that contains all files of the project visible to you.\nConsider the contents of ALL files in the project.\n\n${reactBasePrompt}\n\nHere is a list of files that exist on the file system but are not being shown to you:\n\n  - .gitignore\n  - package-lock.json\n`,
-          ],
-          uiPrompts: [reactBasePrompt],
-        });
-        return; // ✅ void return (not the res.json result)
-      }
-
-      if (answer === "node") {
-        res.json({
-          prompts: [
-            `Here is an artifact that contains all files of the project visible to you.\nConsider the contents of ALL files in the project.\n\n${reactBasePrompt}\n\nHere is a list of files that exist on the file system but are not being shown to you:\n\n  - .gitignore\n  - package-lock.json\n`,
-          ],
-          uiPrompts: [nodeBasePrompt],
-        });
-        return;
-      }
-
-      res.status(403).json({ message: "You can't access this" });
+    if (answer === "node") {
+      res.json({
+        prompts: [
+          `Here is an artifact that contains all files of the project visible to you.\nConsider the contents of ALL files in the project.\n\n${reactBasePrompt}\n\nHere is a list of files that exist on the file system but are not being shown to you:\n\n  - .gitignore\n  - package-lock.json\n`,
+        ],
+        uiPrompts: [nodeBasePrompt],
+      });
       return;
     }
-  );
+
+    res.status(403).json({ message: "You can't access this" });
+    return;
+  });
 
   app.post("/chat", rateLimitOncePerWeek, async (req, res) => {
+    console.log("\n the chat function got called");
     const messages = req.body.messages;
 
     const response = await anthropic.messages.create({
@@ -114,8 +130,6 @@ async function main() {
       max_tokens: 8000,
       system: getSystemPrompt(),
     });
-
-    console.log(response);
 
     res.json({
       response: (response.content[0] as TextBlock)?.text,

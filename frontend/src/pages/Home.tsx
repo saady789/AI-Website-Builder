@@ -44,23 +44,26 @@ export function Home() {
     setRateLimitMessage(null);
 
     const trimmed = prompt.trim();
+    console.log("the prompt is " + prompt);
     if (!trimmed) return;
 
     try {
       setLoading(true);
 
-      // Send to rate-limit aware backend endpoint
-      const res = await axios.post(`${BACKEND_URL}/chat`, { prompt: trimmed });
+      const res = await axios.post(`${BACKEND_URL}/chat`, {
+        messages: [{ role: "user", content: trimmed }],
+      });
+      console.log("response is " + res);
 
       // If success, allow navigation
       navigate("/builder", { state: { prompt: trimmed } });
     } catch (error: any) {
-      console.log(error.response);
       if (error.response?.status === 429) {
-        const rawMsg = error.response.data?.message;
-        const match = rawMsg?.match(/after (.+)$/);
-        if (match?.[1]) {
-          const retryDate = new Date(match[1]);
+        const retryAt = error.response.data?.retryAt;
+        console.log("RetryAt is", retryAt);
+
+        if (retryAt) {
+          const retryDate = new Date(retryAt);
           const formatted = retryDate.toLocaleString("en-US", {
             weekday: "long",
             month: "short",
@@ -76,8 +79,6 @@ export function Home() {
         console.error("Unexpected error:", error);
         setRateLimitMessage("An unexpected error occurred. Please try again.");
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -86,10 +87,25 @@ export function Home() {
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
         <div className="text-center">
           <h1 className="text-2xl font-bold">
-            🔄 Connecting to server...This may take a few seconds
+            🔄 Connecting to server... This may take a few seconds
           </h1>
           <p className="mt-2 text-gray-400">
             Please wait while we start the server.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!backendReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-400">
+            ❌ Server Unavailable
+          </h1>
+          <p className="mt-2 text-gray-400">
+            The backend server could not be reached. Please try again later.
           </p>
         </div>
       </div>
@@ -134,11 +150,8 @@ export function Home() {
               ⛔ Rate Limit Reached
             </h2>
             <p className="text-sm text-gray-300">
-              You’ve already submitted once. You can try again{" "}
-              <span className="text-red-300 font-medium">
-                {rateLimitMessage}
-              </span>
-              .
+              You’ve already submitted once. You can try again after 7 days
+              <span className="text-red-300 font-medium"></span>.
             </p>
           </div>
         )}

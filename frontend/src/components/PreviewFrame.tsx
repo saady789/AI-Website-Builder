@@ -39,7 +39,9 @@ export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
     <div className="h-full flex items-center justify-center text-gray-400">
       {!url && (
         <div className="text-center">
-          <p className="mb-2">Loading...</p>
+          <p className="mb-2">
+            Loading...Can take a few minutes. Do not refresh
+          </p>
         </div>
       )}
       {url && <iframe width={"100%"} height={"100%"} src={url} />}
