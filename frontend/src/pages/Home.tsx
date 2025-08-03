@@ -5,6 +5,8 @@ import axios from "axios";
 import { BACKEND_URL } from "../config";
 
 export function Home() {
+  const [backendReady, setBackendReady] = useState(false);
+  const [checkingBackend, setCheckingBackend] = useState(true);
   const [prompt, setPrompt] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
@@ -20,6 +22,21 @@ export function Home() {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        await axios.get(`${BACKEND_URL}/health`);
+        setBackendReady(true);
+      } catch (err) {
+        console.error("Backend not ready:", err);
+      } finally {
+        setCheckingBackend(false);
+      }
+    };
+
+    checkBackend();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,6 +80,21 @@ export function Home() {
       setLoading(false);
     }
   };
+
+  if (checkingBackend) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">
+            🔄 Connecting to server...This may take a few seconds
+          </h1>
+          <p className="mt-2 text-gray-400">
+            Please wait while we start the server.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Mobile block screen
   if (isMobile) {

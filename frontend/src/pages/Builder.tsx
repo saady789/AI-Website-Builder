@@ -24,13 +24,18 @@ export default Component;`;
 
 export function Builder() {
   const location = useLocation();
-  const { prompt } = location.state as { prompt: string };
+  // const { prompt } = location.state as { prompt: string };
+  const prompt = (location?.state as { prompt?: string })?.prompt;
+
+  const promptSafe = (location?.state as { prompt?: string })?.prompt;
+
   const [userPrompt, setPrompt] = useState("");
   const [llmMessages, setLlmMessages] = useState<
     { role: "user" | "assistant"; content: string }[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [templateSet, setTemplateSet] = useState(false);
+  const [isValidPrompt, setIsValidPrompt] = useState<boolean>(true);
   const webcontainer = useWebContainer();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -40,6 +45,21 @@ export function Builder() {
   const [steps, setSteps] = useState<Step[]>([]);
 
   const [files, setFiles] = useState<FileItem[]>([]);
+
+  // useEffect(() => {
+  //   if (!promptSafe) {
+  //     setIsValidPrompt(false);
+  //   }
+  // }, [promptSafe]);
+  useEffect(() => {
+    if (!promptSafe) {
+      setIsValidPrompt(false);
+      console.log("SETTING false");
+    } else {
+      console.log("Calling init");
+      init();
+    }
+  }, []);
 
   useEffect(() => {
     let originalFiles = [...files];
@@ -164,7 +184,7 @@ export function Builder() {
 
   async function init() {
     const response = await axios.post(`${BACKEND_URL}/template`, {
-      prompt: prompt.trim(),
+      prompt: prompt?.trim(),
     });
     setTemplateSet(true);
 
@@ -208,9 +228,26 @@ export function Builder() {
     ]);
   }
 
-  useEffect(() => {
-    init();
-  }, []);
+  // useEffect(() => {
+  //   init();
+  // }, []);
+  if (!isValidPrompt) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-center px-4">
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full">
+          <h2 className="text-2xl font-bold text-red-400 mb-4">
+            ⚠️ Invalid Access
+          </h2>
+          <p className="text-gray-300">
+            It looks like you opened the builder page directly or refreshed the
+            page.
+            <br />
+            Please go back to the home page and generate a site to proceed.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
