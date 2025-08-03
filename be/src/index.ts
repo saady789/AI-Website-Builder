@@ -73,10 +73,11 @@ async function main() {
     })
   );
 
-  // // 2. Preflight handler
-  // app.options("*", (req, res) => {
-  //   res.sendStatus(200);
-  // });
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    next();
+  });
 
   // 3. JSON parser
   app.use(express.json());
