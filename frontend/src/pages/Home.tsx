@@ -123,8 +123,8 @@ export function Home() {
             Website Builder AI
           </h1>
           <p className="text-lg text-gray-300">
-            Describe your dream website, and we'll help you build it step by
-            step
+            Describe your dream frontend website, and we'll help you build it
+            step by step. We currently only support react.
           </p>
         </div>
 
