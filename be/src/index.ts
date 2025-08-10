@@ -66,7 +66,7 @@ async function main() {
   const app = express();
   app.use(
     cors({
-      origin: "https://alora.saady.dev",
+      origin: "codeweave.saady.dev",
       methods: ["GET", "POST", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
       credentials: true,
